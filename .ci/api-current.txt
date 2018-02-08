@@ -4023,6 +4023,7 @@ public final class net.corda.testing.node.MockNodeKt extends java.lang.Object
   public long getAttachmentContentCacheSizeBytes()
   @org.jetbrains.annotations.NotNull public java.nio.file.Path getCertificatesDirectory()
   public boolean getDetectPublicIp()
+  public boolean getNoLocalShell()
   @org.jetbrains.annotations.NotNull public java.nio.file.Path getNodeKeystore()
   @org.jetbrains.annotations.NotNull public java.nio.file.Path getSslKeystore()
   public long getTransactionCacheSizeBytes()
