@@ -41,8 +41,15 @@ fun <T : Any> Config.parseAs(clazz: KClass<T>): T {
     require(clazz.isData) { "Only Kotlin data classes can be parsed. Offending: ${clazz.qualifiedName}" }
     val constructor = clazz.primaryConstructor!!
     val parameters = constructor.parameters
-    val parameterNames = parameters.mapNotNull { param -> param.name }
-    val unknownConfigurationKeys = this.entrySet().map { it.key }.filterNot(parameterNames::contains).toSortedSet()
+    val parameterNames = parameters.flatMap { param ->
+        mutableSetOf<String>().apply {
+            param.name?.let(this::add)
+            clazz.memberProperties.singleOrNull { it.name == param.name }?.let { matchingProperty ->
+                matchingProperty.annotations.filterIsInstance<OldConfig>().map { it.value }.forEach { this.add(it) }
+            }
+        }
+    }
+    val unknownConfigurationKeys = this.entrySet().mapNotNull { it.key.split(".").firstOrNull() }.filterNot(parameterNames::contains).toSortedSet()
     if (unknownConfigurationKeys.isNotEmpty()) {
         throw UnknownConfigurationKeysException.of(unknownConfigurationKeys)
     }
