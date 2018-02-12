@@ -29,11 +29,23 @@ class ExampleConfigTest {
 
     @Test
     fun `example node_confs parses fine`() {
-        readAndCheckConfigurations<NodeConfiguration>(
-                "example-node.conf",
-                "example-out-of-process-verifier-node.conf",
-                "example-network-map-node.conf"
-        ) {
+        readAndCheckConfigurations<NodeConfiguration>("example-node.conf") {
+            val baseDirectory = Paths.get("some-example-base-dir")
+            ConfigHelper.loadConfig(
+                    baseDirectory = baseDirectory,
+                    configFile = it
+            ).parseAsNodeConfiguration()
+        }
+
+        readAndCheckConfigurations<NodeConfiguration>("example-out-of-process-verifier-node.conf") {
+            val baseDirectory = Paths.get("some-example-base-dir")
+            ConfigHelper.loadConfig(
+                    baseDirectory = baseDirectory,
+                    configFile = it
+            ).parseAsNodeConfiguration()
+        }
+
+        readAndCheckConfigurations<NodeConfiguration>("example-network-map-node.conf") {
             val baseDirectory = Paths.get("some-example-base-dir")
             ConfigHelper.loadConfig(
                     baseDirectory = baseDirectory,
