@@ -213,6 +213,7 @@ class DriverDSLImpl(
         val webAddress = portAllocation.nextHostAndPort()
         val users = rpcUsers.map { it.copy(permissions = it.permissions + DRIVER_REQUIRED_PERMISSIONS) }
         val czUrlConfig = if (compatibilityZone != null) mapOf("compatibilityZoneURL" to compatibilityZone.url.toString()) else emptyMap()
+        // TODO MS: ouch, webAddress
         val config = NodeConfig(ConfigHelper.loadConfig(
                 baseDirectory = baseDirectory(name),
                 allowMissingConfig = true,
@@ -221,7 +222,7 @@ class DriverDSLImpl(
                         "p2pAddress" to p2pAddress.toString(),
                         "rpcSettings.address" to rpcAddress.toString(),
                         "rpcSettings.adminAddress" to rpcAdminAddress.toString(),
-                        "webAddress" to webAddress.toString(),
+//                        "webAddress" to webAddress.toString(),
                         "useTestClock" to useTestClock,
                         "rpcUsers" to if (users.isEmpty()) defaultRpcUserList else users.map { it.toConfig().root().unwrapped() },
                         "verifierType" to verifierType.name
