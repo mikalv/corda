@@ -32,6 +32,8 @@ import kotlin.reflect.jvm.jvmErasure
 @Target(AnnotationTarget.PROPERTY)
 annotation class OldConfig(val value: String)
 
+const val CUSTOM_NODE_PROPERTIES_ROOT = "custom"
+
 // TODO Move other config parsing to use parseAs and remove this
 operator fun <T : Any> Config.getValue(receiver: Any, metadata: KProperty<*>): T {
     return getValueInternal(metadata.name, metadata.returnType)
@@ -49,7 +51,11 @@ fun <T : Any> Config.parseAs(clazz: KClass<T>): T {
             }
         }
     }
-    val unknownConfigurationKeys = this.entrySet().mapNotNull { it.key.split(".").firstOrNull() }.filterNot(parameterNames::contains).toSortedSet()
+    val unknownConfigurationKeys = this.entrySet()
+            .mapNotNull { it.key.split(".").firstOrNull() }
+            .filterNot { it == CUSTOM_NODE_PROPERTIES_ROOT }
+            .filterNot(parameterNames::contains)
+            .toSortedSet()
     if (unknownConfigurationKeys.isNotEmpty()) {
         throw UnknownConfigurationKeysException.of(unknownConfigurationKeys)
     }

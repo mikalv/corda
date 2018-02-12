@@ -14,8 +14,8 @@ import net.corda.node.internal.Node
 import net.corda.node.internal.StartedNode
 import net.corda.node.services.Permissions
 import net.corda.node.services.config.PasswordEncryption
-import net.corda.testing.node.internal.NodeBasedTest
 import net.corda.testing.core.ALICE_NAME
+import net.corda.testing.node.internal.NodeBasedTest
 import org.apache.activemq.artemis.api.core.ActiveMQSecurityException
 import org.apache.shiro.authc.credential.DefaultPasswordService
 import org.junit.After
@@ -82,14 +82,14 @@ class AuthDBTests : NodeBasedTest() {
                                                 "password" to "",
                                                 "driverClassName" to "org.h2.Driver"
                                         )
+                                ),
+                                "options" to mapOf(
+                                        "cache" to mapOf(
+                                                "expireAfterSecs" to cacheExpireAfterSecs,
+                                                "maxEntries" to 50
+                                        )
                                 )
-                        ),
-                        "options" to mapOf(
-                                "cache" to mapOf(
-                                        "expireAfterSecs" to cacheExpireAfterSecs,
-                                        "maxEntries" to 50
-                                )
-                           )
+                        )
                 )
         )
 
@@ -215,7 +215,7 @@ class AuthDBTests : NodeBasedTest() {
 
     @After
     fun tearDown() {
-         db.close()
+        db.close()
     }
 
     private fun encodePassword(s: String) = encodePassword(s, passwordEncryption)
@@ -322,7 +322,7 @@ private val hashedPasswords = mapOf(
  * A functional object for producing password encoded according to the given scheme.
  */
 private fun encodePassword(s: String, format: PasswordEncryption) = when (format) {
-        PasswordEncryption.NONE -> s
-        PasswordEncryption.SHIRO_1_CRYPT -> hashedPasswords[format]!![s] ?:
-            DefaultPasswordService().encryptPassword(s.toCharArray())
-    }
+    PasswordEncryption.NONE -> s
+    PasswordEncryption.SHIRO_1_CRYPT -> hashedPasswords[format]!![s]
+            ?: DefaultPasswordService().encryptPassword(s.toCharArray())
+}
