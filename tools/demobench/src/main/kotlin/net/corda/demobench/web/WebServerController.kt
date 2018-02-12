@@ -12,7 +12,7 @@ class WebServerController : Controller() {
     }
 
     // TODO MS check here
-    internal fun process() = jvm.processFor(webserverPath, "config-file", "webserver.conf")
+    internal fun process() = jvm.processFor(webserverPath, "--config-file", "webserver.conf")
 
     fun webServer() = WebServer(this)
 }
