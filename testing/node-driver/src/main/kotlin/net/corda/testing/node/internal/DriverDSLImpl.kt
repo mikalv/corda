@@ -5,6 +5,7 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
 import com.typesafe.config.ConfigRenderOptions
+import com.typesafe.config.ConfigValueFactory
 import net.corda.client.rpc.CordaRPCClient
 import net.corda.cordform.CordformContext
 import net.corda.cordform.CordformNode
@@ -377,7 +378,7 @@ class DriverDSLImpl(
 
     override fun startWebserver(handle: NodeHandle, maximumHeapSize: String): CordaFuture<WebserverHandle> {
         val debugPort = if (isDebug) debugPortAllocation.nextPort() else null
-        val process = startWebserver(handle, debugPort, maximumHeapSize)
+        val process = startWebserver(handle as NodeHandleInternal, debugPort, maximumHeapSize)
         shutdownManager.registerProcessShutdown(process)
         val webReadyFuture = addressMustBeBoundFuture(executorService, (handle as NodeHandleInternal).webAddress, process)
         return webReadyFuture.map { queryWebserver(handle, process) }
@@ -833,8 +834,9 @@ class DriverDSLImpl(
             )
         }
 
-        private fun startWebserver(handle: NodeHandle, debugPort: Int?, maximumHeapSize: String): Process {
+        private fun startWebserver(handle: NodeHandleInternal, debugPort: Int?, maximumHeapSize: String): Process {
             val className = "net.corda.webserver.WebServer"
+            writeConfig(handle.baseDirectory, "web-server.conf", handle.toWebServerConfig())
             return ProcessUtilities.startCordaProcess(
                     className = className, // cannot directly get class for this, so just use string
                     arguments = listOf("--base-directory", handle.baseDirectory.toString()),
@@ -848,6 +850,23 @@ class DriverDSLImpl(
                     maximumHeapSize = maximumHeapSize
             )
         }
+
+        private fun NodeHandleInternal.toWebServerConfig(): Config {
+
+            var config = ConfigFactory.empty()
+            config += "webAddress" to webAddress.toString()
+            config += "myLegalName" to configuration.myLegalName.toString()
+            config += "rpcAddress" to configuration.rpcOptions.address!!.toString()
+            config += "rpcUsers" to configuration.toConfig().getValue("rpcUsers")
+            config += "useHTTPS" to useHTTPS
+            config += "baseDirectory" to configuration.baseDirectory.toAbsolutePath().toString()
+            config += "keyStorePassword" to configuration.keyStorePassword
+            config += "trustStorePassword" to configuration.trustStorePassword
+            config += "exportJMXto" to configuration.exportJMXto
+            return config
+        }
+
+        private operator fun Config.plus(property: Pair<String, Any>) = withValue(property.first, ConfigValueFactory.fromAnyRef(property.second))
 
         /**
          * Get the package of the caller to the driver so that it can be added to the list of packages the nodes will scan.
