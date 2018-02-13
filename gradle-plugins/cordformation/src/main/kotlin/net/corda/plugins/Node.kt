@@ -220,7 +220,6 @@ class Node(private val project: Project) : CordformNode() {
     internal fun installConfig() {
         configureProperties()
         val tmpConfFile = createTempConfigFile(config.toNodeOnly().root(), "node.conf")
-        // TODO MS: check this appendOptionalConfig
         appendOptionalConfig(tmpConfFile)
         project.copy {
             it.apply {

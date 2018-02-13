@@ -349,13 +349,17 @@ class DriverDSLImpl(
         val webAddress = cordform.webAddress?.let { NetworkHostAndPort.parse(it) } ?: portAllocation.nextHostAndPort()
         val notary = if (cordform.notary != null) mapOf("notary" to cordform.notary) else emptyMap()
         val rpcUsers = cordform.rpcUsers
-        val config = NodeConfig(ConfigHelper.loadConfig(
+
+        val typesafe = ConfigHelper.loadConfig(
                 baseDirectory = baseDirectory(name),
                 allowMissingConfig = true,
                 configOverrides = cordform.config + rpcAddress + notary + mapOf(
                         "rpcUsers" to if (rpcUsers.isEmpty()) defaultRpcUserList else rpcUsers
                 )
-        ))
+        )
+        val cordaConfig = typesafe.toNodeOnly().parseAsNodeConfiguration()
+        val config = NodeConfig(typesafe, cordaConfig)
+        // TODO MS check here, webserver fails
         return startNodeInternal(config, webAddress, null, "200m", localNetworkMap)
     }
 
@@ -380,7 +384,7 @@ class DriverDSLImpl(
         val debugPort = if (isDebug) debugPortAllocation.nextPort() else null
         val process = startWebserver(handle as NodeHandleInternal, debugPort, maximumHeapSize)
         shutdownManager.registerProcessShutdown(process)
-        val webReadyFuture = addressMustBeBoundFuture(executorService, (handle as NodeHandleInternal).webAddress, process)
+        val webReadyFuture = addressMustBeBoundFuture(executorService, handle.webAddress, process)
         return webReadyFuture.map { queryWebserver(handle, process) }
     }
 
@@ -418,6 +422,38 @@ class DriverDSLImpl(
             }
         }
     }
+
+    private fun Config.toNodeOnly(): Config {
+
+        return if (hasPath("webAddress")) {
+            withoutPath("webAddress").withoutPath("useHTTPS")
+        } else {
+            this
+        }
+    }
+
+    private fun Config.toWebServerOnly(): Config {
+
+        var config = ConfigFactory.empty()
+        config += "webAddress" to getValue("webAddress")
+        config += "myLegalName" to getValue("myLegalName")
+        if (hasPath("rpcOptions.address") || hasPath("rpcAddress")) {
+            config += "rpcAddress" to if (hasPath("rpcOptions.address")) {
+                getValue("rpcOptions.address")
+            } else {
+                getValue("rpcAddress")
+            }
+        }
+        config += "rpcUsers" to getValue("rpcUsers")
+        config += "useHTTPS" to getValue("useHTTPS")
+        config += "baseDirectory" to getValue("baseDirectory")
+        config += "keyStorePassword" to getValue("baseDirectory")
+        config += "trustStorePassword" to getValue("trustStorePassword")
+        config += "exportJMXto" to getValue("exportJMXto")
+        return config
+    }
+
+    private operator fun Config.plus(property: Pair<String, Any>) = withValue(property.first, ConfigValueFactory.fromAnyRef(property.second))
 
     private fun startNotaryIdentityGeneration(): CordaFuture<List<NotaryInfo>> {
         return executorService.fork {
@@ -716,14 +752,12 @@ class DriverDSLImpl(
      * Simple holder class to capture the node configuration both as the raw [Config] object and the parsed [NodeConfiguration].
      * Keeping [Config] around is needed as the user may specify extra config options not specified in [NodeConfiguration].
      */
-    private class NodeConfig(val typesafe: Config) {
-        val corda: NodeConfiguration = typesafe.parseAsNodeConfiguration().also { nodeConfiguration ->
-            val errors = nodeConfiguration.validate()
-            if (errors.isNotEmpty()) {
-                throw IllegalStateException("Invalid node configuration. Errors where:${System.lineSeparator()}${errors.joinToString(System.lineSeparator())}")
-            }
+    private class NodeConfig(val typesafe: Config, val corda: NodeConfiguration = typesafe.parseAsNodeConfiguration().also { nodeConfiguration ->
+        val errors = nodeConfiguration.validate()
+        if (errors.isNotEmpty()) {
+            throw IllegalStateException("Invalid node configuration. Errors where:${System.lineSeparator()}${errors.joinToString(System.lineSeparator())}")
         }
-    }
+    })
 
     companion object {
         internal val log = contextLogger()
