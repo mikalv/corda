@@ -1,9 +1,6 @@
 package net.corda.plugins
 
-import com.typesafe.config.ConfigFactory
-import com.typesafe.config.ConfigRenderOptions
-import com.typesafe.config.ConfigValueFactory
-import com.typesafe.config.ConfigObject
+import com.typesafe.config.*
 import groovy.lang.Closure
 import net.corda.cordform.CordformNode
 import net.corda.cordform.RpcSettings
@@ -150,7 +147,7 @@ class Node(private val project: Project) : CordformNode() {
             project.logger.info("Using custom webserver: $webserverJar.")
             File(webserverJar)
         }
-        
+
         project.copy {
             it.apply {
                 from(webJar)
@@ -178,7 +175,11 @@ class Node(private val project: Project) : CordformNode() {
      */
     private fun installAgentJar() {
         // TODO: improve how we re-use existing declared external variables from root gradle.build
-        val jolokiaVersion = try { project.rootProject.ext<String>("jolokia_version") } catch (e: Exception) { "1.3.7" }
+        val jolokiaVersion = try {
+            project.rootProject.ext<String>("jolokia_version")
+        } catch (e: Exception) {
+            "1.3.7"
+        }
         val agentJar = project.configuration("runtime").files {
             (it.group == "org.jolokia") &&
                     (it.name == "jolokia-jvm") &&
@@ -197,7 +198,7 @@ class Node(private val project: Project) : CordformNode() {
         }
     }
 
-    private fun createTempConfigFile(configObject: ConfigObject): File {
+    private fun createTempConfigFile(configObject: ConfigObject, fileName: String): File {
         val options = ConfigRenderOptions
                 .defaults()
                 .setOriginComments(false)
@@ -208,7 +209,6 @@ class Node(private val project: Project) : CordformNode() {
         // Need to write a temporary file first to use the project.copy, which resolves directories correctly.
         val tmpDir = File(project.buildDir, "tmp")
         Files.createDirectories(tmpDir.toPath())
-        var fileName = "${nodeDir.name}.conf"
         val tmpConfFile = File(tmpDir, fileName)
         Files.write(tmpConfFile.toPath(), configFileText, StandardCharsets.UTF_8)
         return tmpConfFile
@@ -219,7 +219,8 @@ class Node(private val project: Project) : CordformNode() {
      */
     internal fun installConfig() {
         configureProperties()
-        val tmpConfFile = createTempConfigFile(config.root())
+        val tmpConfFile = createTempConfigFile(config.toNodeOnly().root(), "node.conf")
+        // TODO MS: check this appendOptionalConfig
         appendOptionalConfig(tmpConfFile)
         project.copy {
             it.apply {
@@ -227,19 +228,61 @@ class Node(private val project: Project) : CordformNode() {
                 into(rootDir)
             }
         }
+        if (config.hasPath("webAddress")) {
+            val webServerConfigFile = createTempConfigFile(config.toWebServerOnly().root(), "web-server.conf")
+            project.copy {
+                it.apply {
+                    from(webServerConfigFile)
+                    into(rootDir)
+                }
+            }
+        }
     }
+
+    private fun Config.toNodeOnly(): Config {
+
+        return if (hasPath("webAddress")) {
+            withoutPath("webAddress").withoutPath("useHTTPS")
+        } else {
+            this
+        }
+    }
+
+    private fun Config.toWebServerOnly(): Config {
+
+        var config = ConfigFactory.empty()
+        config += "webAddress" to getValue("webAddress")
+        config += "myLegalName" to getValue("myLegalName")
+        if (hasPath("rpcOptions.address") || hasPath("rpcAddress")) {
+            config += "rpcAddress" to if (hasPath("rpcOptions.address")) {
+                getValue("rpcOptions.address")
+            } else {
+                getValue("rpcAddress")
+            }
+        }
+        config += "rpcUsers" to getValue("rpcUsers")
+        config += "useHTTPS" to getValue("useHTTPS")
+        config += "baseDirectory" to getValue("baseDirectory")
+        config += "keyStorePassword" to getValue("baseDirectory")
+        config += "trustStorePassword" to getValue("trustStorePassword")
+        config += "exportJMXto" to getValue("exportJMXto")
+        return config
+    }
+
+    private operator fun Config.plus(property: Pair<String, Any>) = withValue(property.first, ConfigValueFactory.fromAnyRef(property.second))
 
     /**
      * Installs the Dockerized configuration file to the root directory and detokenises it.
      */
     internal fun installDockerConfig() {
+        // TODO MS: change here as well
         configureProperties()
         val dockerConf = config
                 .withValue("p2pAddress", ConfigValueFactory.fromAnyRef("$containerName:$p2pPort"))
                 .withValue("rpcSettings.address", ConfigValueFactory.fromAnyRef("$containerName:${rpcSettings.port}"))
                 .withValue("rpcSettings.adminAddress", ConfigValueFactory.fromAnyRef("$containerName:${rpcSettings.adminPort}"))
                 .withValue("detectPublicIp", ConfigValueFactory.fromAnyRef(false))
-        val tmpConfFile = createTempConfigFile(dockerConf.root())
+        val tmpConfFile = createTempConfigFile(dockerConf.root(), "node.conf")
         appendOptionalConfig(tmpConfFile)
         project.copy {
             it.apply {
