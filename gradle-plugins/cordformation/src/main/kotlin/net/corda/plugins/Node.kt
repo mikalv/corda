@@ -198,7 +198,7 @@ class Node(private val project: Project) : CordformNode() {
         }
     }
 
-    private fun createTempConfigFile(configObject: ConfigObject, fileName: String): File {
+    private fun createTempConfigFile(configObject: ConfigObject, fileNameTrail: String): File {
         val options = ConfigRenderOptions
                 .defaults()
                 .setOriginComments(false)
@@ -209,6 +209,7 @@ class Node(private val project: Project) : CordformNode() {
         // Need to write a temporary file first to use the project.copy, which resolves directories correctly.
         val tmpDir = File(project.buildDir, "tmp")
         Files.createDirectories(tmpDir.toPath())
+        val fileName = "${nodeDir.name}_$fileNameTrail"
         val tmpConfFile = File(tmpDir, fileName)
         Files.write(tmpConfFile.toPath(), configFileText, StandardCharsets.UTF_8)
         return tmpConfFile

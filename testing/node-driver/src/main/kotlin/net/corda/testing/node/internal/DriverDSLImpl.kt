@@ -214,7 +214,6 @@ class DriverDSLImpl(
         val webAddress = portAllocation.nextHostAndPort()
         val users = rpcUsers.map { it.copy(permissions = it.permissions + DRIVER_REQUIRED_PERMISSIONS) }
         val czUrlConfig = if (compatibilityZone != null) mapOf("compatibilityZoneURL" to compatibilityZone.url.toString()) else emptyMap()
-        // TODO MS: ouch, webAddress
         val config = NodeConfig(ConfigHelper.loadConfig(
                 baseDirectory = baseDirectory(name),
                 allowMissingConfig = true,
@@ -223,7 +222,6 @@ class DriverDSLImpl(
                         "p2pAddress" to p2pAddress.toString(),
                         "rpcSettings.address" to rpcAddress.toString(),
                         "rpcSettings.adminAddress" to rpcAdminAddress.toString(),
-//                        "webAddress" to webAddress.toString(),
                         "useTestClock" to useTestClock,
                         "rpcUsers" to if (users.isEmpty()) defaultRpcUserList else users.map { it.toConfig().root().unwrapped() },
                         "verifierType" to verifierType.name
@@ -350,15 +348,17 @@ class DriverDSLImpl(
         val notary = if (cordform.notary != null) mapOf("notary" to cordform.notary) else emptyMap()
         val rpcUsers = cordform.rpcUsers
 
+        val rawConfig = cordform.config + rpcAddress + notary + mapOf(
+                "rpcUsers" to if (rpcUsers.isEmpty()) defaultRpcUserList else rpcUsers
+        )
+        // TODO MS here! this is where the node.conf gets written!
         val typesafe = ConfigHelper.loadConfig(
                 baseDirectory = baseDirectory(name),
                 allowMissingConfig = true,
-                configOverrides = cordform.config + rpcAddress + notary + mapOf(
-                        "rpcUsers" to if (rpcUsers.isEmpty()) defaultRpcUserList else rpcUsers
-                )
+                configOverrides = rawConfig.toNodeOnly()
         )
-        val cordaConfig = typesafe.toNodeOnly().parseAsNodeConfiguration()
-        val config = NodeConfig(typesafe, cordaConfig)
+        val cordaConfig = typesafe.parseAsNodeConfiguration()
+        val config = NodeConfig(rawConfig, cordaConfig)
         // TODO MS check here, webserver fails
         return startNodeInternal(config, webAddress, null, "200m", localNetworkMap)
     }
@@ -422,38 +422,6 @@ class DriverDSLImpl(
             }
         }
     }
-
-    private fun Config.toNodeOnly(): Config {
-
-        return if (hasPath("webAddress")) {
-            withoutPath("webAddress").withoutPath("useHTTPS")
-        } else {
-            this
-        }
-    }
-
-    private fun Config.toWebServerOnly(): Config {
-
-        var config = ConfigFactory.empty()
-        config += "webAddress" to getValue("webAddress")
-        config += "myLegalName" to getValue("myLegalName")
-        if (hasPath("rpcOptions.address") || hasPath("rpcAddress")) {
-            config += "rpcAddress" to if (hasPath("rpcOptions.address")) {
-                getValue("rpcOptions.address")
-            } else {
-                getValue("rpcAddress")
-            }
-        }
-        config += "rpcUsers" to getValue("rpcUsers")
-        config += "useHTTPS" to getValue("useHTTPS")
-        config += "baseDirectory" to getValue("baseDirectory")
-        config += "keyStorePassword" to getValue("baseDirectory")
-        config += "trustStorePassword" to getValue("trustStorePassword")
-        config += "exportJMXto" to getValue("exportJMXto")
-        return config
-    }
-
-    private operator fun Config.plus(property: Pair<String, Any>) = withValue(property.first, ConfigValueFactory.fromAnyRef(property.second))
 
     private fun startNotaryIdentityGeneration(): CordaFuture<List<NotaryInfo>> {
         return executorService.fork {
@@ -795,7 +763,8 @@ class DriverDSLImpl(
                     throw IllegalStateException("No quasar agent: -javaagent:lib/quasar.jar and working directory project root might fix")
                 }
                 // Write node.conf
-                writeConfig(config.corda.baseDirectory, "node.conf", config.typesafe)
+                // TODO MS check whether web-server.conf is needed as well
+                writeConfig(config.corda.baseDirectory, "node.conf", config.typesafe.toNodeOnly())
                 // TODO pass the version in?
                 val node = InProcessNode(config.corda, MOCK_VERSION_INFO, cordappPackages).start()
                 val nodeThread = thread(name = config.corda.myLegalName.organisation) {
@@ -822,7 +791,8 @@ class DriverDSLImpl(
                     "debug port is " + (debugPort ?: "not enabled") + ", " +
                     "jolokia monitoring port is " + (monitorPort ?: "not enabled"))
             // Write node.conf
-            writeConfig(config.corda.baseDirectory, "node.conf", config.typesafe)
+            // TODO MS check whether web-server.conf is needed as well
+            writeConfig(config.corda.baseDirectory, "node.conf", config.typesafe.toNodeOnly())
 
             val systemProperties = mutableMapOf(
                     "name" to config.corda.myLegalName,
@@ -1108,3 +1078,35 @@ fun writeConfig(path: Path, filename: String, config: Config) {
     val configString = config.root().render(ConfigRenderOptions.defaults())
     configString.byteInputStream().copyTo(path / filename, StandardCopyOption.REPLACE_EXISTING)
 }
+
+private fun Config.toNodeOnly(): Config {
+
+    return if (hasPath("webAddress")) {
+        withoutPath("webAddress").withoutPath("useHTTPS")
+    } else {
+        this
+    }
+}
+
+private fun Config.toWebServerOnly(): Config {
+
+    var config = ConfigFactory.empty()
+    config += "webAddress" to getValue("webAddress")
+    config += "myLegalName" to getValue("myLegalName")
+    if (hasPath("rpcOptions.address") || hasPath("rpcAddress")) {
+        config += "rpcAddress" to if (hasPath("rpcOptions.address")) {
+            getValue("rpcOptions.address")
+        } else {
+            getValue("rpcAddress")
+        }
+    }
+    config += "rpcUsers" to getValue("rpcUsers")
+    config += "useHTTPS" to getValue("useHTTPS")
+    config += "baseDirectory" to getValue("baseDirectory")
+    config += "keyStorePassword" to getValue("baseDirectory")
+    config += "trustStorePassword" to getValue("trustStorePassword")
+    config += "exportJMXto" to getValue("exportJMXto")
+    return config
+}
+
+private operator fun Config.plus(property: Pair<String, Any>) = withValue(property.first, ConfigValueFactory.fromAnyRef(property.second))
