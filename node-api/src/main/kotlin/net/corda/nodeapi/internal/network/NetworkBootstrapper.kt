@@ -89,7 +89,7 @@ class NetworkBootstrapper {
             val nodeDir = (directory / nodeName)
             if (!nodeDir.exists()) { nodeDir.createDirectory() }
             confFile.moveTo(nodeDir / "node.conf", StandardCopyOption.REPLACE_EXISTING)
-            webServerConfFiles.firstOrNull { it.toString().removeSuffix("_web-server.conf") == nodeName }?.moveTo(nodeDir / "web-server.conf", StandardCopyOption.REPLACE_EXISTING)
+            webServerConfFiles.firstOrNull { directory.relativize(it).toString().removeSuffix("_web-server.conf") == nodeName }?.moveTo(nodeDir / "web-server.conf", StandardCopyOption.REPLACE_EXISTING)
             Files.copy(cordaJar, (nodeDir / "corda.jar"), StandardCopyOption.REPLACE_EXISTING)
         }
         Files.delete(cordaJar)

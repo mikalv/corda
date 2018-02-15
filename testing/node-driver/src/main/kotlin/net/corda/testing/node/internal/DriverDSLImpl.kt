@@ -351,7 +351,6 @@ class DriverDSLImpl(
         val rawConfig = cordform.config + rpcAddress + notary + mapOf(
                 "rpcUsers" to if (rpcUsers.isEmpty()) defaultRpcUserList else rpcUsers
         )
-        // TODO MS here! this is where the node.conf gets written!
         val typesafe = ConfigHelper.loadConfig(
                 baseDirectory = baseDirectory(name),
                 allowMissingConfig = true,
@@ -359,7 +358,6 @@ class DriverDSLImpl(
         )
         val cordaConfig = typesafe.parseAsNodeConfiguration()
         val config = NodeConfig(rawConfig, cordaConfig)
-        // TODO MS check here, webserver fails
         return startNodeInternal(config, webAddress, null, "200m", localNetworkMap)
     }
 
@@ -763,7 +761,6 @@ class DriverDSLImpl(
                     throw IllegalStateException("No quasar agent: -javaagent:lib/quasar.jar and working directory project root might fix")
                 }
                 // Write node.conf
-                // TODO MS check whether web-server.conf is needed as well
                 writeConfig(config.corda.baseDirectory, "node.conf", config.typesafe.toNodeOnly())
                 // TODO pass the version in?
                 val node = InProcessNode(config.corda, MOCK_VERSION_INFO, cordappPackages).start()
@@ -791,7 +788,6 @@ class DriverDSLImpl(
                     "debug port is " + (debugPort ?: "not enabled") + ", " +
                     "jolokia monitoring port is " + (monitorPort ?: "not enabled"))
             // Write node.conf
-            // TODO MS check whether web-server.conf is needed as well
             writeConfig(config.corda.baseDirectory, "node.conf", config.typesafe.toNodeOnly())
 
             val systemProperties = mutableMapOf(

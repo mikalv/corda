@@ -2,7 +2,6 @@ package net.corda.plugins
 
 import java.awt.GraphicsEnvironment
 import java.io.File
-import java.nio.file.Files
 import java.util.*
 
 private val HEADLESS_FLAG = "--headless"

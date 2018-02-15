@@ -131,7 +131,13 @@ class Node(private val project: Project) : CordformNode() {
             config = config.withValue("notary", ConfigValueFactory.fromMap(notary))
         }
         if (extraConfig != null) {
-            config = config.withFallback(ConfigFactory.parseMap(extraConfig))
+            val extraProperties = ConfigFactory.parseMap(extraConfig)
+            config = if (config.hasPath("custom")) {
+                val customConfig = config.getConfig("custom")
+                config.withValue("custom", customConfig.withFallback(extraProperties).root())
+            } else {
+                config.withValue("custom", extraProperties.root())
+            }
         }
     }
 
@@ -175,11 +181,7 @@ class Node(private val project: Project) : CordformNode() {
      */
     private fun installAgentJar() {
         // TODO: improve how we re-use existing declared external variables from root gradle.build
-        val jolokiaVersion = try {
-            project.rootProject.ext<String>("jolokia_version")
-        } catch (e: Exception) {
-            "1.3.7"
-        }
+        val jolokiaVersion = try { project.rootProject.ext<String>("jolokia_version") } catch (e: Exception) { "1.3.7" }
         val agentJar = project.configuration("runtime").files {
             (it.group == "org.jolokia") &&
                     (it.name == "jolokia-jvm") &&
@@ -251,8 +253,8 @@ class Node(private val project: Project) : CordformNode() {
     private fun Config.toWebServerOnly(): Config {
 
         var config = ConfigFactory.empty()
-        config += "webAddress" to getValue("webAddress")
-        config += "myLegalName" to getValue("myLegalName")
+        config = copyTo("webAddress", config)
+        config = copyTo("myLegalName", config)
         if (hasPath("rpcOptions.address") || hasPath("rpcAddress")) {
             config += "rpcAddress" to if (hasPath("rpcOptions.address")) {
                 getValue("rpcOptions.address")
@@ -260,13 +262,23 @@ class Node(private val project: Project) : CordformNode() {
                 getValue("rpcAddress")
             }
         }
-        config += "rpcUsers" to getValue("rpcUsers")
-        config += "useHTTPS" to getValue("useHTTPS")
-        config += "baseDirectory" to getValue("baseDirectory")
-        config += "keyStorePassword" to getValue("baseDirectory")
-        config += "trustStorePassword" to getValue("trustStorePassword")
-        config += "exportJMXto" to getValue("exportJMXto")
+        config = copyTo("rpcUsers", config)
+        config = copyTo("useHTTPS", config)
+        config = copyTo("baseDirectory", config)
+        config = copyTo("keyStorePassword", config)
+        config = copyTo("trustStorePassword", config)
+        config = copyTo("exportJMXto", config)
+        config = copyTo("custom", config)
         return config
+    }
+
+    private fun Config.copyTo(key: String, target: Config, targetKey: String = key): Config {
+
+        return if (hasPath(key)) {
+            target + (targetKey to getValue(key))
+        } else {
+            target
+        }
     }
 
     private operator fun Config.plus(property: Pair<String, Any>) = withValue(property.first, ConfigValueFactory.fromAnyRef(property.second))
@@ -275,19 +287,28 @@ class Node(private val project: Project) : CordformNode() {
      * Installs the Dockerized configuration file to the root directory and detokenises it.
      */
     internal fun installDockerConfig() {
-        // TODO MS: change here as well
         configureProperties()
         val dockerConf = config
                 .withValue("p2pAddress", ConfigValueFactory.fromAnyRef("$containerName:$p2pPort"))
                 .withValue("rpcSettings.address", ConfigValueFactory.fromAnyRef("$containerName:${rpcSettings.port}"))
                 .withValue("rpcSettings.adminAddress", ConfigValueFactory.fromAnyRef("$containerName:${rpcSettings.adminPort}"))
                 .withValue("detectPublicIp", ConfigValueFactory.fromAnyRef(false))
-        val tmpConfFile = createTempConfigFile(dockerConf.root(), "node.conf")
+
+        val tmpConfFile = createTempConfigFile(dockerConf.toNodeOnly().root(), "node.conf")
         appendOptionalConfig(tmpConfFile)
         project.copy {
             it.apply {
                 from(tmpConfFile)
                 into(rootDir)
+            }
+        }
+        if (config.hasPath("webAddress")) {
+            val webServerConfigFile = createTempConfigFile(dockerConf.toWebServerOnly().root(), "web-server.conf")
+            project.copy {
+                it.apply {
+                    from(webServerConfigFile)
+                    into(rootDir)
+                }
             }
         }
     }

@@ -11,7 +11,6 @@ class WebServerController : Controller() {
         log.info("Web Server JAR: $webserverPath")
     }
 
-    // TODO MS check here
     internal fun process() = jvm.processFor(webserverPath, "--config-file", "webserver.conf")
 
     fun webServer() = WebServer(this)
