@@ -222,6 +222,25 @@ class Node(private val project: Project) : CordformNode() {
      */
     internal fun installConfig() {
         configureProperties()
+        createNodeAndWebServerConfigFiles(config)
+    }
+
+    /**
+     * Installs the Dockerized configuration file to the root directory and detokenises it.
+     */
+    internal fun installDockerConfig() {
+        configureProperties()
+        val dockerConf = config
+                .withValue("p2pAddress", ConfigValueFactory.fromAnyRef("$containerName:$p2pPort"))
+                .withValue("rpcSettings.address", ConfigValueFactory.fromAnyRef("$containerName:${rpcSettings.port}"))
+                .withValue("rpcSettings.adminAddress", ConfigValueFactory.fromAnyRef("$containerName:${rpcSettings.adminPort}"))
+                .withValue("detectPublicIp", ConfigValueFactory.fromAnyRef(false))
+
+        createNodeAndWebServerConfigFiles(dockerConf)
+    }
+
+    private fun createNodeAndWebServerConfigFiles(config: Config) {
+
         val tmpConfFile = createTempConfigFile(config.toNodeOnly().root(), "node.conf")
         appendOptionalConfig(tmpConfFile)
         project.copy {
@@ -282,36 +301,6 @@ class Node(private val project: Project) : CordformNode() {
     }
 
     private operator fun Config.plus(property: Pair<String, Any>) = withValue(property.first, ConfigValueFactory.fromAnyRef(property.second))
-
-    /**
-     * Installs the Dockerized configuration file to the root directory and detokenises it.
-     */
-    internal fun installDockerConfig() {
-        configureProperties()
-        val dockerConf = config
-                .withValue("p2pAddress", ConfigValueFactory.fromAnyRef("$containerName:$p2pPort"))
-                .withValue("rpcSettings.address", ConfigValueFactory.fromAnyRef("$containerName:${rpcSettings.port}"))
-                .withValue("rpcSettings.adminAddress", ConfigValueFactory.fromAnyRef("$containerName:${rpcSettings.adminPort}"))
-                .withValue("detectPublicIp", ConfigValueFactory.fromAnyRef(false))
-
-        val tmpConfFile = createTempConfigFile(dockerConf.toNodeOnly().root(), "node.conf")
-        appendOptionalConfig(tmpConfFile)
-        project.copy {
-            it.apply {
-                from(tmpConfFile)
-                into(rootDir)
-            }
-        }
-        if (config.hasPath("webAddress")) {
-            val webServerConfigFile = createTempConfigFile(dockerConf.toWebServerOnly().root(), "web-server.conf")
-            project.copy {
-                it.apply {
-                    from(webServerConfigFile)
-                    into(rootDir)
-                }
-            }
-        }
-    }
 
     /**
      * Appends installed config file with properties from an optional file.

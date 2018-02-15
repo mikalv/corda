@@ -6,12 +6,15 @@ from the previous milestone release.
 
 UNRELEASED
 ----------
+* Parsing of ``NodeConfiguration`` will now fail if unknown configuration keys are found.
+
+* The web server now has its own ``web-server.conf`` file, separate from ``node.conf``.
+
+* Introduced a placeholder for custom properties within ``node.conf``; the property key is "custom".
 
 * Introduced Flow Draining mode, in which a node continues executing existing flows, but does not start new. This is to support graceful node shutdown/restarts.
   In particular, when this mode is on, new flows through RPC will be rejected, scheduled flows will be ignored, and initial session messages will not be consumed.
   This will ensure that the number of checkpoints will strictly diminish with time, allowing for a clean shutdown.
-
-* Parsing of ``NodeConfiguration`` will now fail if unknown configuration keys are found.
 
 * Make the serialisation finger-printer a pluggable entity rather than hard wiring into the factory
 
